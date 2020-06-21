@@ -23,7 +23,12 @@ _start:
                 call            write_char
 
                 jmp             exit
-
+; multipleis two long numbers
+;    r8 -- adress of 1st argument
+;    rsi -- adress of 2nd argument
+;    rcx -- length of long number(number of qwords)
+; result:
+;    result is written to rdi
 mul_long_long:
                 push            rsi
                 push            r8
@@ -45,7 +50,13 @@ mul_long_long:
                 pop             r8
                 pop             rsi
                 ret
-
+; multiplies long number by a short and adds it to another long number
+;    rbx -- short multiplier
+;    rsi -- adress of long multiplier
+;    rdi -- adress of summand
+;    rcx -- length of long number(number of qwords)
+; result:
+;    result is equal to rdi + rsi * rbx and written to rdi
 add_mul_long_short:
                 push            rdi
                 push            rcx
