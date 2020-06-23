@@ -12,7 +12,7 @@ struct vector {
     typedef T const* const_iterator;
 
     vector();                    // O(1) nothrow
-    vector(vector<T> const&);                  // O(N) strong
+    vector(vector const&);                  // O(N) strong
     vector& operator=(vector const&); // O(N) strong
 
     ~vector();                              // O(N) nothrow
@@ -92,25 +92,21 @@ vector<T>::vector() {
 template<typename T>
 vector<T>::vector(vector const& other) : vector() {
     if (other.capacity_ != 0) {
-        T* new_data = static_cast<T*>(operator new(other.capacity_ * sizeof(T)));
+        T* new_data = static_cast<T*>(operator new(other.size_ * sizeof(T)));
         try {
             copy_all(new_data, other.data_, other.size_);
         } catch (...) {
             operator delete(new_data);
             throw;
         }
-        init(new_data, other.size_, other.capacity_);
-    } else {
-        delete_data();
-        init(nullptr, 0, 0);
+        init(new_data, other.size_, other.size_);
     }
 }
 
 template<typename T>
 vector<T>& vector<T>::operator=(vector const& other) {
-    vector<T> tmp = other;
     if (this != &other) {
-        swap(tmp);
+        vector(other).swap(*this);
     }
     return *this;
 }
@@ -282,11 +278,7 @@ void vector<T>::shrink_to_fit() {
         return;
     }
     if (size_ != 0) {
-        vector<T> tmp(*this);
-        tmp.new_buffer(size_);
-        copy_all(tmp.data_, data_, size_);
-        swap(tmp);
-        capacity_ = size_;
+        vector(*this).swap(*this);
     } else {
         operator delete (data_);
         init(nullptr, 0, 0);
@@ -307,31 +299,24 @@ typename vector<T>::iterator vector<T>::insert(vector::const_iterator pos, T con
 
 template<typename T>
 typename vector<T>::iterator vector<T>::erase(vector::const_iterator pos) {
-    assert(size_ != 0);
-    iterator res = begin() + (pos - begin());
-    iterator pos_ = begin() + (pos - begin());
-    for (; pos_ + 1 != end(); pos_++) {
-        std::swap(*pos_, *(pos_ + 1));
-    }
-    pop_back();
-    return res;
+    return erase(pos, pos + 1);
 }
 
 template<typename T>
 typename vector<T>::iterator vector<T>::erase(vector::const_iterator first, vector::const_iterator last) {
     assert(size_ != 0);
-    assert(last - first > 0);
-    iterator last_ = begin() + (last - begin());
-    iterator first_ = begin() + (first - begin());
-    while (last_ != end()) {
-        std::swap(*first_, *last_);
-        last_++;
-        first_++;
-    }
+    ptrdiff_t shift_last = last - begin();
+    ptrdiff_t shift_first = first - begin();
+    std::move(begin() + shift_last, end(), begin() + shift_first);
+//    while (begin() + shift_last != end()) {
+//        std::swap(*(begin() + shift_first), *(begin() + shift_last));
+//        shift_last++;
+//        shift_first++;
+//    }
     for (ptrdiff_t i = 0; i < last - first; ++i) {
         pop_back();
     }
-    return begin() + (first - begin());
+    return begin() + shift_first;
 }
 
 #endif // VECTOR_H
