@@ -260,10 +260,10 @@ void vector<T>::push_back(T const& el) {
 
 template<typename T>
 void vector<T>::push_back_realloc(T const& el) {
-    vector<T> tmp(*this);
-    tmp.reserve(capacity_? capacity_ * 2 : 1);
-    tmp.push_back(el);
-    swap(tmp);
+    T tmp = el;
+    reserve(capacity_? capacity_ * 2 : 1);
+    new (data_ + size_) T(tmp);
+    ++size_;
 }
 
 template<typename T>
