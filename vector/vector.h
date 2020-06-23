@@ -55,10 +55,11 @@ struct vector {
     iterator erase(const_iterator first, const_iterator last); // O(N) weak
 
 private:
+    static void copy_all(T*, T const*, size_t);
+    static void destroy_all(T*, size_t);
+
+    T* new_buffer(size_t) const;
     void push_back_realloc(T const&);
-    void new_buffer(size_t);
-    void copy_all(T*, T const*, size_t);
-    void destroy_all(T*, size_t);
     void init(T*, size_t, size_t);
     void delete_data();
 
@@ -90,16 +91,22 @@ vector<T>::vector() {
 }
 
 template<typename T>
+T* vector<T>::new_buffer(size_t size) const {
+    T* new_data = static_cast<T*>(operator new(size * sizeof(T)));
+    try {
+        copy_all(new_data, data_, size_);
+    } catch (...) {
+        operator delete(new_data);
+        throw;
+    }
+    return new_data;
+}
+
+template<typename T>
 vector<T>::vector(vector const& other) : vector() {
     if (other.capacity_ != 0) {
-        T* new_data = static_cast<T*>(operator new(other.size_ * sizeof(T)));
-        try {
-            copy_all(new_data, other.data_, other.size_);
-        } catch (...) {
-            operator delete(new_data);
-            throw;
-        }
-        init(new_data, other.size_, other.size_);
+        init(other.new_buffer(other.size_),
+                other.size_, other.size_);
     }
 }
 
@@ -113,9 +120,11 @@ vector<T>& vector<T>::operator=(vector const& other) {
 
 template<typename T>
 void vector<T>::swap(vector& other) {
-    std::swap(capacity_, other.capacity_);
-    std::swap(size_, other.size_);
-    std::swap(data_, other.data_);
+    using std::swap;
+
+    swap(capacity_, other.capacity_);
+    swap(size_, other.size_);
+    swap(data_, other.data_);
 }
 
 template<typename T>
@@ -126,7 +135,7 @@ vector<T>::~vector() {
 template<typename T>
 T& vector<T>::operator[](size_t i) {
     assert(i < size_);
-    return *(data_ + i);
+    return data_[i];
 }
 
 template<typename T>
@@ -196,19 +205,11 @@ size_t vector<T>::capacity() const {
 template<typename T>
 void vector<T>::reserve(size_t new_capacity) {
     if (new_capacity > capacity_) {
-        vector<T> tmp(*this);
-        tmp.new_buffer(new_capacity);
-        copy_all(tmp.data_, data_, size_);
-        tmp.capacity_ = new_capacity;
-        swap(tmp);
+        T* new_data = new_buffer(new_capacity);
+        delete_data();
+        data_ = new_data;
+        capacity_ = new_capacity;
     }
-}
-
-template<typename T>
-void vector<T>::new_buffer(size_t new_capacity) {
-    T* ptr = static_cast<T*>(operator new(new_capacity * sizeof(T)));
-    delete_data();
-    data_ = ptr;
 }
 
 template<typename T>
@@ -308,11 +309,6 @@ typename vector<T>::iterator vector<T>::erase(vector::const_iterator first, vect
     ptrdiff_t shift_last = last - begin();
     ptrdiff_t shift_first = first - begin();
     std::move(begin() + shift_last, end(), begin() + shift_first);
-//    while (begin() + shift_last != end()) {
-//        std::swap(*(begin() + shift_first), *(begin() + shift_last));
-//        shift_last++;
-//        shift_first++;
-//    }
     for (ptrdiff_t i = 0; i < last - first; ++i) {
         pop_back();
     }
