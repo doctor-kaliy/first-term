@@ -104,7 +104,7 @@ T* vector<T>::new_buffer(size_t size) const {
 
 template<typename T>
 vector<T>::vector(vector const& other) : vector() {
-    if (other.capacity_ != 0) {
+    if (other.size_ != 0) {
         init(other.new_buffer(other.size_),
                 other.size_, other.size_);
     }
