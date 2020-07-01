@@ -2,23 +2,29 @@
 #define BIG_INTEGER_H
 
 #include <cstddef>
-#include <gmp.h>
 #include <iosfwd>
+#include <cstdint>
+#include <vector>
+#include <functional>
 
-struct big_integer
-{
+struct big_integer {
+    using data_storage = std::vector<uint32_t>;
+
     big_integer();
     big_integer(big_integer const& other);
     big_integer(int a);
+    big_integer(uint32_t a);
     explicit big_integer(std::string const& str);
-    ~big_integer();
+    big_integer(int32_t sign, data_storage const& other_data);
+    explicit big_integer(data_storage const& other);
+
+    ~big_integer() = default;
 
     big_integer& operator=(big_integer const& other);
-
     big_integer& operator+=(big_integer const& rhs);
     big_integer& operator-=(big_integer const& rhs);
     big_integer& operator*=(big_integer const& rhs);
-    big_integer& operator/=(big_integer const& rhs);
+    big_integer& operator/=(big_integer const& other);
     big_integer& operator%=(big_integer const& rhs);
 
     big_integer& operator&=(big_integer const& rhs);
@@ -47,8 +53,17 @@ struct big_integer
 
     friend std::string to_string(big_integer const& a);
 
+    data_storage data;
 private:
-    mpz_t mpz;
+    int32_t sign;
+
+    big_integer& add_signed(int32_t rhs_sign, data_storage const& rhs_words);
+
+    uint32_t get_signed(size_t id, size_t not_zero_pos) const;
+
+    size_t size() const;
+
+    big_integer &bit_operation(const big_integer &rhs, std::function<uint32_t(uint32_t, uint32_t)> const& op);
 };
 
 big_integer operator+(big_integer a, big_integer const& b);
