@@ -267,11 +267,11 @@ big_integer& big_integer::operator/=(big_integer const &other) {
     data.resize(n - m + 1);
 
     for (size_t i = m, j = 0; i <= n; ++i, ++j) {
-        __uint128_t x = (((__uint128_t) get_word(this_abs, this_abs.size() - 1 - j) << 64U) +
-                         ((__uint128_t) get_word(this_abs, this_abs.size() - 2 - j) << 32U) +
-                         ((__uint128_t) get_word(this_abs, this_abs.size() - 3 - j)));
-        __uint128_t y = (((__uint128_t) other_abs[0] << 32U) +
-                         (__uint128_t) other_abs[1]);
+        __uint128_t x = (static_cast<__uint128_t>(get_word(this_abs, this_abs.size() - 1 - j)) << 64U) +
+                (static_cast<__uint128_t>(get_word(this_abs, this_abs.size() - 2 - j)) << 32U) +
+                (static_cast<__uint128_t>(get_word(this_abs, this_abs.size() - 3 - j)));
+        __uint128_t y = (static_cast<__uint128_t>(other_abs[0]) << 32U) +
+                static_cast<__uint128_t>(other_abs[1]);
 
         uint32_t qt = std::min(static_cast<uint64_t>(x / y),
                 static_cast<uint64_t>(UINT32_MAX)) & UINT32_MAX;
