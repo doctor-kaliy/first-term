@@ -253,14 +253,14 @@ big_integer& big_integer::operator/=(big_integer const &other) {
         return *this;
     }
 
+    data_storage this_abs(data);
     data_storage other_abs(other.data);
 
     uint32_t f = ((static_cast<uint64_t>(UINT32_MAX) + 1)
                  / (static_cast<uint64_t>(other_abs[0]) + 1)) & UINT32_MAX;
-    operator*=(f);
+    short_mul(this_abs, f);
     short_mul(other_abs, f);
 
-    data_storage this_abs(data);
     this_abs.insert(this_abs.begin(), 0);
     size_t m = other_abs.size() + 1;
     size_t n = this_abs.size();
