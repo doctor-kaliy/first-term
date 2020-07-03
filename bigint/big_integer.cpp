@@ -82,7 +82,6 @@ static uint32_t lowest_8_bytes(uint64_t value) {
     return (value & UINT32_MAX);
 }
 
-
 static uint64_t get_data64(data_storage const& data, size_t id) {
     return data[id];
 }
@@ -123,11 +122,11 @@ static void remove_zeroes(data_storage& v) {
     v.resize(std::move(v.begin() + ptr, v.end(), v.begin()) - v.begin());
 }
 
-uint64_t add(uint32_t a, uint32_t b) {
+static uint64_t add(uint32_t a, uint32_t b) {
     return static_cast<uint64_t>(a) + b;
 }
 
-uint64_t sub(uint32_t a, uint32_t b) {
+static uint64_t sub(uint32_t a, uint32_t b) {
     return static_cast<uint64_t>(a) - b;
 }
 
@@ -252,6 +251,14 @@ static __uint128_t get_word128(data_storage const& data, size_t i) {
     return get_word(data, i);
 }
 
+static __uint128_t build128(data_storage const& data, size_t size, size_t start) {
+    __uint128_t res = 0;
+    for (size_t i = start; i < size + start; ++i) {
+        res += get_word128(data, data.size() - i - 1) << ((size - 1ULL - i + start) * 32ULL);
+    }
+    return res;
+}
+
 big_integer& big_integer::operator/=(big_integer const &other) {
     if (compare_abs(data, other.data) < 0) {
         return (*this = 0);
@@ -278,11 +285,8 @@ big_integer& big_integer::operator/=(big_integer const &other) {
     data.resize(n - m + 1);
 
     for (size_t i = m, j = 0; i <= n; ++i, ++j) {
-        __uint128_t x = (get_word128(this_abs, this_abs.size() - 1 - j) << 64U) +
-                (get_word128(this_abs, this_abs.size() - 2 - j) << 32U) +
-                (get_word128(this_abs, this_abs.size() - 3 - j));
-        __uint128_t y = (get_word128(other_abs, other_abs.size() - 1) << 32U) +
-                get_word128(other_abs, other_abs.size() - 2);
+        __uint128_t x = build128(this_abs, 3, j);
+        __uint128_t y = build128(other_abs, 2, 0);
 
         uint32_t qt = lowest_8_bytes(std::min(static_cast<uint64_t>(x / y), BASE - 1));
         data_storage dq(other_abs);
