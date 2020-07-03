@@ -4,46 +4,44 @@
 #include <stdexcept>
 #include <algorithm>
 #include <utility>
-#include <functional>
 
 using data_storage = big_integer::data_storage;
 
-big_integer::big_integer(int32_t sign, data_storage const& other_data) : data(other_data) {
-    this->sign = sign;
-}
+template<typename T>
+using function = big_integer::function<T>;
 
-big_integer::big_integer() {
-    sign = 0;
-}
+static uint64_t constexpr BASE = static_cast<uint64_t>(UINT32_MAX) + 1ULL;
 
-big_integer::big_integer(big_integer const& other) : data(other.data) {
-    sign = other.sign;
-}
+big_integer::big_integer(int32_t sign, data_storage const& other_data) : data(other_data), sign(sign) {}
+
+big_integer::big_integer() : sign(0) {}
+
+big_integer::big_integer(big_integer const& other) = default;
 
 big_integer::big_integer(data_storage const& other) : big_integer(1, other) {}
 
 big_integer::big_integer(int a) {
-    int32_t signum = 0;
     if (a != 0) {
-        signum = a < 0? -1 : 1;
-        data.push_back(signum * static_cast<uint32_t>(a));
+        sign = a < 0 ? -1 : 1;
+        data.push_back(static_cast<uint32_t>(std::abs(static_cast<int64_t>(a))));
+    } else {
+        sign = 0;
     }
-    sign = signum;
 }
 
 big_integer::big_integer(uint32_t a) {
-    int32_t signum = 0;
     if (a != 0) {
-        signum = 1;
+        sign = 1;
         data.push_back(a);
+    } else {
+        sign = 0;
     }
-    sign = signum;
 }
 
 
 big_integer::big_integer(std::string const& str) : big_integer() {
     size_t len = str.size();
-    if (len == 0) {
+    if (len == 0 || (len == 1 && !isdigit(str[0]))) {
         throw std::runtime_error("Invalid string");
     }
     size_t ptr = 0;
@@ -65,7 +63,7 @@ big_integer::big_integer(std::string const& str) : big_integer() {
         signum = 0;
     } else {
         while (ptr < len) {
-            if (str[ptr] < '0' || str[ptr] > '9') {
+            if (!isdigit(str[ptr])) {
                 throw std::runtime_error("Invalid string");
             }
             *this *= 10;
@@ -78,6 +76,15 @@ big_integer::big_integer(std::string const& str) : big_integer() {
 
 size_t big_integer::size() const {
     return data.size();
+}
+
+static uint32_t lowest_8_bytes(uint64_t value) {
+    return (value & UINT32_MAX);
+}
+
+
+static uint64_t get_data64(data_storage const& data, size_t id) {
+    return data[id];
 }
 
 static int32_t compare_abs(data_storage const& words, data_storage const& other_words) {
@@ -125,17 +132,17 @@ uint64_t sub(uint32_t a, uint32_t b) {
 }
 
 static void apply_arithmetic_long(data_storage& a, data_storage const& b,
-        size_t begin, size_t end, std::function<uint64_t(uint32_t, uint32_t)> const& op) {
+        size_t begin, size_t end, function<uint64_t> const& op) {
     int32_t carry = 0;
     for (size_t i = begin; i < end; ++i) {
-        uint64_t swc = op(a[a.size() - i - 1], get_word(b, i - begin)) + carry;
-        a[a.size() - i - 1] = static_cast<uint32_t>(swc & UINT32_MAX);
+        uint64_t swc = op(get_word(a, i), get_word(b, i - begin)) + carry;
+        a[a.size() - i - 1] = lowest_8_bytes(swc);
         carry = (swc >> 32ULL);
     }
 }
 
 static data_storage apply_binary_long(data_storage const& a, data_storage const &b,
-        std::function<uint64_t(uint32_t, uint32_t)> const& op) {
+        function<uint64_t> const& op) {
     data_storage res(std::max(a.size(), b.size()) + 1, 0);
     std::move(a.begin(), a.end(), res.end() - a.size());
     apply_arithmetic_long(res, b, 0, res.size(), op);
@@ -149,6 +156,18 @@ static data_storage apply_add_long(data_storage const& a, data_storage const &b)
 
 static data_storage apply_subtract_long(data_storage const& a, data_storage const &b) {
     return apply_binary_long(a, b, sub);
+}
+
+static void short_mul(data_storage &a, uint32_t rhs) {
+    uint32_t carry = 0;
+    for (size_t i = 0; i < a.size(); ++i) {
+        uint64_t swc = static_cast<uint64_t>(get_word(a, i)) * rhs + carry;
+        a[a.size() - i - 1] = lowest_8_bytes(swc);
+        carry = (swc >> 32ULL);
+    }
+    if (carry) {
+        a.insert(a.begin(), carry);
+    }
 }
 
 big_integer& big_integer::add_signed(int32_t rhs_sign, data_storage const& rhs_words) {
@@ -166,8 +185,8 @@ big_integer& big_integer::add_signed(int32_t rhs_sign, data_storage const& rhs_w
             new_data.clear();
             sign = 0;
         } else {
-            new_data = cmp > 0 ? apply_subtract_long(new_data, rhs_words) : apply_subtract_long(rhs_words, new_data);
-            sign = sign == cmp? 1 : -1;
+            new_data = (cmp > 0 ? apply_subtract_long(new_data, rhs_words) : apply_subtract_long(rhs_words, new_data));
+            sign = (sign == cmp? 1 : -1);
         }
     }
     data = new_data;
@@ -180,18 +199,6 @@ big_integer& big_integer::operator+=(big_integer const& rhs) {
 
 big_integer& big_integer::operator-=(big_integer const& rhs) {
     return add_signed(-rhs.sign, rhs.data);
-}
-
-static void short_mul(data_storage &a, uint32_t rhs) {
-    uint32_t carry = 0;
-    for (size_t i = 0; i < a.size(); ++i) {
-        uint64_t swc = static_cast<uint64_t>(get_word(a, i)) * rhs + carry;
-        a[a.size() - i - 1] = (swc & UINT32_MAX);
-        carry = (swc >> 32ULL);
-    }
-    if (carry) {
-        a.insert(a.begin(), carry);
-    }
 }
 
 big_integer& big_integer::operator*=(big_integer const& rhs) {
@@ -220,7 +227,7 @@ static void short_div(data_storage& data, uint32_t rhs) {
     uint64_t rest = 0;
     for (uint32_t& i : data) {
         uint64_t x = (rest << 32ULL) | i;
-        i = static_cast<uint32_t>((x / rhs) & UINT32_MAX);
+        i = lowest_8_bytes(x / rhs);
         rest = x % rhs;
     }
     remove_zeroes(data);
@@ -241,6 +248,10 @@ static void difference(data_storage& a, size_t st, data_storage const& b, size_t
     apply_arithmetic_long(a, b, a.size() - st - prefix, a.size() - st, sub);
 }
 
+static __uint128_t get_word128(data_storage const& data, size_t i) {
+    return get_word(data, i);
+}
+
 big_integer& big_integer::operator/=(big_integer const &other) {
     if (compare_abs(data, other.data) < 0) {
         return (*this = 0);
@@ -256,8 +267,8 @@ big_integer& big_integer::operator/=(big_integer const &other) {
     data_storage this_abs(data);
     data_storage other_abs(other.data);
 
-    uint32_t f = ((static_cast<uint64_t>(UINT32_MAX) + 1)
-                 / (static_cast<uint64_t>(other_abs[0]) + 1)) & UINT32_MAX;
+    uint32_t f = lowest_8_bytes(BASE
+                 / (get_data64(other_abs, 0) + 1));
     short_mul(this_abs, f);
     short_mul(other_abs, f);
 
@@ -267,14 +278,13 @@ big_integer& big_integer::operator/=(big_integer const &other) {
     data.resize(n - m + 1);
 
     for (size_t i = m, j = 0; i <= n; ++i, ++j) {
-        __uint128_t x = (static_cast<__uint128_t>(get_word(this_abs, this_abs.size() - 1 - j)) << 64U) +
-                (static_cast<__uint128_t>(get_word(this_abs, this_abs.size() - 2 - j)) << 32U) +
-                (static_cast<__uint128_t>(get_word(this_abs, this_abs.size() - 3 - j)));
-        __uint128_t y = (static_cast<__uint128_t>(other_abs[0]) << 32U) +
-                static_cast<__uint128_t>(other_abs[1]);
+        __uint128_t x = (get_word128(this_abs, this_abs.size() - 1 - j) << 64U) +
+                (get_word128(this_abs, this_abs.size() - 2 - j) << 32U) +
+                (get_word128(this_abs, this_abs.size() - 3 - j));
+        __uint128_t y = (get_word128(other_abs, other_abs.size() - 1) << 32U) +
+                get_word128(other_abs, other_abs.size() - 2);
 
-        uint32_t qt = std::min(static_cast<uint64_t>(x / y),
-                static_cast<uint64_t>(UINT32_MAX)) & UINT32_MAX;
+        uint32_t qt = lowest_8_bytes(std::min(static_cast<uint64_t>(x / y), BASE - 1));
         data_storage dq(other_abs);
         short_mul(dq, qt);
 
@@ -322,7 +332,7 @@ uint32_t big_integer::get_signed(size_t id, size_t not_zero_pos) const {
 
 static big_integer get_value(data_storage& value) {
     if (!value.empty() && value[0] >> 31u) {
-        for (unsigned int & i : value) {
+        for (uint32_t& i : value) {
             i = ~i;
         }
         remove_zeroes(value);
@@ -337,7 +347,7 @@ static big_integer get_value(data_storage& value) {
 
 
 big_integer& big_integer::bit_operation(big_integer const& rhs,
-                                        std::function<uint32_t(uint32_t, uint32_t)> const& op) {
+        function<uint32_t> const& op) {
     data_storage result(std::max(data.size(), rhs.data.size()) + 1);
     size_t pos1 = not_zero_id(data);
     size_t pos2 = not_zero_id(rhs.data);
@@ -401,12 +411,13 @@ big_integer& big_integer::operator>>=(int rhs) {
     for (size_t i = 0; i < data.size(); ++i) {
         data[i] = get_signed(data.size() - i - 1, pos);
     }
-    uint64_t shifted = ((static_cast<uint64_t >(data[0]) << (32U - small_shift))
-            | (static_cast<uint64_t >(data[0]) << 32U));
+    uint64_t tmp = get_data64(data, 0);
+    uint64_t shifted = ((tmp << (32U - small_shift))
+            | (tmp << 32U));
     data[0] = shifted >> 32ULL;
     shifted <<= 32ULL;
     for (size_t i = 1; i < data.size(); ++i) {
-        shifted |= ((static_cast<uint64_t>(data[i]) << 32ULL) >> small_shift);
+        shifted |= (get_data64(data, i) << (32ULL - small_shift));
         data[i] = shifted >> 32ULL;
         shifted <<= 32ULL;
     }
@@ -495,11 +506,10 @@ bool operator!=(big_integer const& a, big_integer const& b) {
 
 bool operator<(big_integer const& a, big_integer const& b) {
     if (a.sign == b.sign) {
-        int32_t sign = a.sign;
-        if (sign == 0) {
+        if (a.sign == 0) {
             return false;
         }
-        return ((compare_abs(a.data, b.data) * sign) < 0);
+        return ((compare_abs(a.data, b.data) * a.sign) < 0);
     }
     return a.sign < b.sign;
 }

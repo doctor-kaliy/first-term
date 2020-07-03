@@ -10,6 +10,9 @@
 struct big_integer {
     using data_storage = std::vector<uint32_t>;
 
+    template<typename T>
+    using function = std::function<T(uint32_t, uint32_t)>;
+
     big_integer();
     big_integer(big_integer const& other);
     big_integer(int a);
@@ -53,8 +56,8 @@ struct big_integer {
 
     friend std::string to_string(big_integer const& a);
 
-    data_storage data;
 private:
+    data_storage data;
     int32_t sign;
 
     big_integer& add_signed(int32_t rhs_sign, data_storage const& rhs_words);
