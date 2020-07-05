@@ -8,9 +8,9 @@
 using data_storage = big_integer::data_storage;
 
 template<typename T>
-using function = big_integer::function<T>;
+using binary_operation = big_integer::binary_operation<T>;
 
-static uint64_t constexpr BASE = static_cast<uint64_t>(UINT32_MAX) + 1ULL;
+static uint64_t const BASE = 0x100000000ULL;
 
 big_integer::big_integer(int32_t sign, data_storage const& other_data) : data(other_data), sign(sign) {}
 
@@ -23,18 +23,15 @@ big_integer::big_integer(data_storage const& other) : big_integer(1, other) {}
 big_integer::big_integer(int a) {
     if (a != 0) {
         sign = a < 0 ? -1 : 1;
-        data.push_back(static_cast<uint32_t>(std::abs(static_cast<int64_t>(a))));
+        data.push_back(std::abs(static_cast<int64_t>(a)));
     } else {
         sign = 0;
     }
 }
 
-big_integer::big_integer(uint32_t a) {
+big_integer::big_integer(uint32_t a) : sign(a != 0) {
     if (a != 0) {
-        sign = 1;
         data.push_back(a);
-    } else {
-        sign = 0;
     }
 }
 
@@ -79,7 +76,7 @@ size_t big_integer::size() const {
 }
 
 static uint32_t lowest_8_bytes(uint64_t value) {
-    return (value & UINT32_MAX);
+    return static_cast<uint32_t>(value & (BASE - 1));
 }
 
 static uint64_t get_data64(data_storage const& data, size_t id) {
@@ -131,7 +128,7 @@ static uint64_t sub(uint32_t a, uint32_t b) {
 }
 
 static void apply_arithmetic_long(data_storage& a, data_storage const& b,
-        size_t begin, size_t end, function<uint64_t> const& op) {
+        size_t begin, size_t end, binary_operation<uint64_t> const& op) {
     int32_t carry = 0;
     for (size_t i = begin; i < end; ++i) {
         uint64_t swc = op(get_word(a, i), get_word(b, i - begin)) + carry;
@@ -141,7 +138,7 @@ static void apply_arithmetic_long(data_storage& a, data_storage const& b,
 }
 
 static data_storage apply_binary_long(data_storage const& a, data_storage const &b,
-        function<uint64_t> const& op) {
+        binary_operation<uint64_t> const& op) {
     data_storage res(std::max(a.size(), b.size()) + 1, 0);
     std::move(a.begin(), a.end(), res.end() - a.size());
     apply_arithmetic_long(res, b, 0, res.size(), op);
@@ -351,7 +348,7 @@ static big_integer get_value(data_storage& value) {
 
 
 big_integer& big_integer::bit_operation(big_integer const& rhs,
-        function<uint32_t> const& op) {
+                                        binary_operation<uint32_t> const& op) {
     data_storage result(std::max(data.size(), rhs.data.size()) + 1);
     size_t pos1 = not_zero_id(data);
     size_t pos2 = not_zero_id(rhs.data);
@@ -416,7 +413,7 @@ big_integer& big_integer::operator>>=(int rhs) {
         data[i] = get_signed(data.size() - i - 1, pos);
     }
     uint64_t tmp = get_data64(data, 0);
-    uint64_t shifted = ((tmp << (32U - small_shift))
+    uint64_t shifted = ((tmp << (32ULL - small_shift))
             | (tmp << 32U));
     data[0] = shifted >> 32ULL;
     shifted <<= 32ULL;
