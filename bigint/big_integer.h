@@ -11,7 +11,7 @@ struct big_integer {
     using data_storage = std::vector<uint32_t>;
 
     template<typename T>
-    using function = std::function<T(uint32_t, uint32_t)>;
+    using binary_operation = std::function<T(uint32_t, uint32_t)>;
 
     big_integer();
     big_integer(big_integer const& other);
