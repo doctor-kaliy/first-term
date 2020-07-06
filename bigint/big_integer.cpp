@@ -25,7 +25,7 @@ big_integer::big_integer(int a) {
     if (a != 0) {
         sign = a < 0 ? -1 : 1;
         if (a == INT_MIN) {
-            data.push_back(INT_MAX + 1);
+            data.push_back(static_cast<uint32_t>(INT_MAX) + 1);
         } else {
             data.push_back(std::abs(a));
         }
