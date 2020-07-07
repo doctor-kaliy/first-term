@@ -20,24 +20,19 @@ size_t uint_vector::capacity() {
     if (small()) {
         return uint_vector::STATIC_SIZE;
     } else {
-        if (!storage.dynamic_data) {
-            return 0;
-        }
         return storage.dynamic_data->capacity;
     }
 }
 
 void uint_vector::delete_data() {
-    if (storage.dynamic_data) {
-        storage.dynamic_data->ref_count--;
-        if (storage.dynamic_data->ref_count == 0) {
-            operator delete(storage.dynamic_data);
-        }
+    storage.dynamic_data->ref_count--;
+    if (storage.dynamic_data->ref_count == 0) {
+        operator delete(storage.dynamic_data);
     }
 }
 
 void uint_vector::unshare() {
-    if (!small() && storage.dynamic_data && storage.dynamic_data->ref_count != 1) {
+    if (!small() && storage.dynamic_data->ref_count != 1) {
         shared_buffer* new_data = new_buffer(size_);
         storage.dynamic_data->ref_count--;
         storage.dynamic_data = new_data;
