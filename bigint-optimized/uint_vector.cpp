@@ -3,9 +3,13 @@
 #include <cstring>
 
 static const size_t MAX_SIZE = ((SIZE_MAX << 1u) >> 1u);
+static const size_t HIGHEST_BIT = (~MAX_SIZE);
 
 shared_buffer* uint_vector::allocate_buffer(size_t size) {
-    return static_cast<shared_buffer*>(operator new(sizeof(shared_buffer) + size * sizeof(uint32_t)));
+    shared_buffer* res = static_cast<shared_buffer*>(operator new(sizeof(shared_buffer) + size * sizeof(uint32_t)));
+    res->ref_count = 1;
+    res->capacity = size;
+    return res;
 }
 
 size_t uint_vector::size() const {
@@ -40,7 +44,7 @@ void uint_vector::unshare() {
     }
 }
 
-uint_vector::uint_vector() : size_(~MAX_SIZE) {}
+uint_vector::uint_vector() : size_(HIGHEST_BIT) {}
 
 uint_vector::uint_vector(size_t size, uint32_t const& value) : uint_vector() {
     resize(size, value);
@@ -48,21 +52,13 @@ uint_vector::uint_vector(size_t size, uint32_t const& value) : uint_vector() {
 
 shared_buffer* uint_vector::new_buffer(size_t size) const {
     shared_buffer* new_data = allocate_buffer(size);
-    new_data->ref_count = 1;
-    new_data->capacity = size;
     copy_all(new_data, storage.dynamic_data, size_);
     return new_data;
 }
 
-uint_vector::uint_vector(uint_vector const& other) : uint_vector() {
-    if (!other.empty()) {
-        if (other.small()) {
-            std::copy(other.storage.static_data, other.storage.static_data + uint_vector::STATIC_SIZE, storage.static_data);
-        } else {
-            storage.dynamic_data = other.storage.dynamic_data;
-            storage.dynamic_data->ref_count++;
-        }
-        size_ = other.size_;
+uint_vector::uint_vector(uint_vector const& other) : size_(other.size_), storage(other.storage) {
+    if (!small()) {
+        storage.dynamic_data->ref_count++;
     }
 }
 
@@ -104,7 +100,7 @@ uint32_t const& uint_vector::operator[](size_t i) const {
 }
 
 bool uint_vector::small() const {
-    return (size_ & (~MAX_SIZE)) != 0;
+    return (size_ & HIGHEST_BIT) != 0;
 }
 
 uint32_t& uint_vector::back() {
@@ -148,8 +144,6 @@ void uint_vector::reserve(size_t new_capacity) {
         shared_buffer* new_data;
         if (small()) {
             new_data = allocate_buffer(new_capacity);
-            new_data->capacity = new_capacity;
-            new_data->ref_count = 1;
             std::copy(storage.static_data, storage.static_data + uint_vector::STATIC_SIZE, new_data->words);
             size_ &= MAX_SIZE;
         } else {
@@ -167,7 +161,7 @@ void uint_vector::copy_all(shared_buffer* dst, shared_buffer const* src, size_t 
 
 void uint_vector::clear() {
     if (small()) {
-        size_ = (~MAX_SIZE);
+        size_ = HIGHEST_BIT;
     } else {
         unshare();
         size_ = 0;
@@ -191,17 +185,15 @@ uint_vector::const_iterator uint_vector::end() const {
 
 void uint_vector::push_back(uint32_t const& el) {
     unshare();
-    if (size() != capacity()) {
-        if (small()) {
-            storage.static_data[size()] = el;
-        } else {
-            storage.dynamic_data->words[size()] = el;
-        }
-        ++size_;
-    } else {
+    if (size() == capacity()) {
         reserve(capacity() != 0 ? capacity() * 2 : 1);
-        push_back(el);
     }
+    if (small()) {
+        storage.static_data[size()] = el;
+    } else {
+        storage.dynamic_data->words[size()] = el;
+    }
+    ++size_;
 }
 
 void uint_vector::pop_back() {
@@ -222,13 +214,20 @@ uint_vector::iterator uint_vector::insert(uint_vector::const_iterator pos, uint3
 }
 
 void uint_vector::resize(size_t new_size) {
-    while (size() > new_size) {
-        pop_back();
+    if (size() > new_size) {
+        size_ = new_size | (HIGHEST_BIT & size_);
     }
 }
 
 void uint_vector::resize(size_t new_size, uint32_t const& value) {
-    while (size() < new_size) {
-        push_back(value);
+    if (new_size > size()) {
+        reserve(new_size);
+        if (small()) {
+            std::fill(storage.static_data + size_, storage.static_data + new_size, value);
+            size_ = HIGHEST_BIT | new_size;
+        } else {
+            std::fill(storage.dynamic_data->words + size_, storage.dynamic_data->words + new_size, value);
+            size_ = new_size;
+        }
     }
 }
