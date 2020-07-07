@@ -70,7 +70,7 @@ private:
     union {
         shared_buffer* dynamic_data;
         uint32_t static_data[STATIC_SIZE];
-    };
+    } storage;
 };
 
 #endif // BIGINT_UINT_VECTOR_H
